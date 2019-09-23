@@ -93,11 +93,6 @@ func getRequest(conn *ss.Conn) (host string, err error) {
 	return
 }
 
-const logCntDelta = 100
-
-var connCnt int
-var nextLogConnCnt = logCntDelta
-
 func sanitizeAddr(addr net.Addr) string {
 	if sanitizeIps {
 		return "x.x.x.x:zzzz"
@@ -109,15 +104,6 @@ func sanitizeAddr(addr net.Addr) string {
 func handleConnection(conn *ss.Conn, port string) {
 	var host string
 
-	connCnt++ // this maybe not accurate, but should be enough
-	if connCnt-nextLogConnCnt >= 0 {
-		// XXX There's no xadd in the atomic package, so it's difficult to log
-		// the message only once with low cost. Also note nextLogConnCnt maybe
-		// added twice for current peak connection number level.
-		log.Printf("Number of client connections reaches %d\n", nextLogConnCnt)
-		nextLogConnCnt += logCntDelta
-	}
-
 	// function arguments are always evaluated, so surround debug statement
 	// with if statement
 	if debug {
@@ -128,7 +114,6 @@ func handleConnection(conn *ss.Conn, port string) {
 		if debug {
 			debug.Printf("closed pipe %s<->%s\n", sanitizeAddr(conn.RemoteAddr()), host)
 		}
-		connCnt--
 		if !closed {
 			conn.Close()
 		}
@@ -247,6 +232,10 @@ func (pm *PasswdManager) del(port string) {
 }
 
 func (pm *PasswdManager) addTraffic(port string, n int) {
+        _, ok := pm.get(port)
+        if !ok {
+                return
+        }
 	pm.Lock()
 	pm.trafficStats[port] = pm.trafficStats[port] + int64(n)
 	pm.Unlock()
